@@ -110,6 +110,7 @@ void usage(prog_args_t* args, char* prog)
 
 void parse_args(prog_args_t* args, int argc, char** argv)
 {
+  // printf("RUNNING THIS***********************************************************\n");
   int opt;
   args_default(args);
 
@@ -137,6 +138,7 @@ void parse_args(prog_args_t* args, int argc, char** argv)
         args->file_start_sf_idx = (uint32_t)strtol(argv[optind], NULL, 10);
         break;
       case 'n':
+        // printf("n is %d\n", (int32_t)strtol(argv[optind], NULL, 10));
         args->num_sub_channel = (int32_t)strtol(argv[optind], NULL, 10);
         break;
       case 'o':
@@ -149,6 +151,7 @@ void parse_args(prog_args_t* args, int argc, char** argv)
         args->use_standard_lte_rates = true;
         break;
       case 's':
+        // printf("s is %d\n", (int32_t)strtol(argv[optind], NULL, 10));
         args->size_sub_channel = (int32_t)strtol(argv[optind], NULL, 10);
         break;
       case 'v':
@@ -225,7 +228,7 @@ int main(int argc, char** argv)
   }
 
   // write header
-  fprintf(logfile, "rx_timestamp_us,prb_start_idx,nof_prb,N_x_id,mcs_idx,rv_idx,sf_idx\n");
+  // fprintf(logfile, "rx_timestamp_us,prb_start_idx,nof_prb,N_x_id,mcs_idx,rv_idx,sf_idx\n");
 
   /***** Init *******/
   srslte_use_standard_symbol_size(prog_args.use_standard_lte_rates);
@@ -374,6 +377,8 @@ int main(int argc, char** argv)
   uint32_t pscch_prb_start_idx = 0;
 
   uint32_t current_sf_idx = 0;
+ 
+  fprintf(logfile, "subframe, timestamp (ms), resource_blocks\n");   // ADDED
 
   while (keep_running) {
 
@@ -389,6 +394,18 @@ int main(int argc, char** argv)
     // do FFT (on first port)
     srslte_ofdm_rx_sf(&fft[0]);
 
+
+    /* 
+    * START OF ADDED CODE
+    */ 
+    // uint32_t total_subchannels = sl_comm_resource_pool.num_sub_channel; 
+    // bool resource_block[total_subchannels]; // initialize with the size of the total number of subchannels
+    uint32_t nsch = sl_comm_resource_pool.num_sub_channel;  // number of subchannels
+    uint32_t ssch = sl_comm_resource_pool.size_sub_channel;  // number of size of subchannels in resource blocks
+    uint32_t num_resource_blocks = nsch * ssch; 
+    bool resource_block[num_resource_blocks]; // initialize with the size of the total number of subchannels
+    /* END OF ADDED CODE
+    */ 
     for (int sub_channel_idx = 0; sub_channel_idx < sl_comm_resource_pool.num_sub_channel; sub_channel_idx++) {
       pscch_prb_start_idx = sub_channel_idx * sl_comm_resource_pool.size_sub_channel;
 
@@ -401,8 +418,19 @@ int main(int argc, char** argv)
         srslte_chest_sl_ls_estimate_equalize(&pscch_chest, sf_buffer[0], equalized_sf_buffer);
 
         if (srslte_pscch_decode(&pscch, equalized_sf_buffer, sci_rx, pscch_prb_start_idx) == SRSLTE_SUCCESS) {
-          if (srslte_sci_format1_unpack(&sci, sci_rx) == SRSLTE_SUCCESS) {
+          if (srslte_sci_format1_unpack(&sci, sci_rx) == SRSLTE_SUCCESS) {   // WE CARE ABOUT THIS !!!
+                                                    // unpacked SCI format 1 data is in sci variable (refer to Fabian Eckermann's paper for more details)
             srslte_sci_info(&sci, sci_msg, sizeof(sci_msg));
+            /*
+            * START OF ADDED CODE TO PROBE SCI FOR SCI FORMAT 1 INFORMATION. Mainly want to extract resource reservation and RIV info
+            */ 
+            // get the time stamp 
+            // uint32_t rsc_reserv = sci.resource_reserv;  // resource reservation field; 4 bits
+            // uint32_t riv = sci.riv;   // riv "resource indication value"; 0-8 bits
+            /*
+            * END OF ADDED CODE TO PROBE SCI FOR SCI FORMAT 1 INFORMATION.
+            */ 
+
             fprintf(stdout, "%s", sci_msg);
 
             num_decoded_sci++;
@@ -412,6 +440,47 @@ int main(int argc, char** argv)
             uint32_t L_subCH               = 0;
             srslte_ra_sl_type0_from_riv(
                 sci.riv, sl_comm_resource_pool.num_sub_channel, &L_subCH, &sub_channel_start_idx);
+
+            /*
+            * START OF ADDED CODE TO PROBE SCI FOR SCI FORMAT 1 INFORMATION. Mainly want to extract resource reservation and RIV info
+            */ 
+            // sub_channel_start_idx = starting sub-channel index 
+            // L_subCH = the length in terms of contiguously allocated sub-channels
+            // Assumption1: using adjacent channelization scheme
+            // Assumption2: the length of L_subCH includes SCI allcation 
+            // Assumption3: the sub-channel indexes begin at 1 and go up to (and including) total_subchannels (need to provide reasoning so)
+            // *TODO*: need to figure out what C-V2X channelization scheme is used (i.e. adjacent or non-adjacent)
+            // *TODO*: need to cover edge cases, e.g. when L_subCH=0 ?? 
+            // uint32_t sub_channel_end_idx = sub_channel_start_idx + L_subCH - 1; // define the end of the channel utilization 
+            uint32_t rb_start_idx = (sub_channel_start_idx - 1) * ssch + 1; // define the start of the contiguous resource blocks allocation 
+            uint32_t rb_end_idx = rb_start_idx + L_subCH * ssch - 1; // define the end of the contiguous resource blocks allocation 
+            // printf("Num resource blocks is %u\n", num_resource_blocks);
+            for (int rb = 0; rb < num_resource_blocks; rb++) {  // rb = "resource block"
+                if ((rb+1) < rb_start_idx || (rb+1) > rb_end_idx)
+                    resource_block[rb] = false; // RB not allocated
+                else 
+                    resource_block[rb] = true;  // RB is allocated
+            }
+
+            // print format: <time_stamp> <subchannel_utilization>
+            printf("Time Stamp: %lu ms\t", (uint64_t) round(srslte_timestamp_real(&ue_sync.last_timestamp) * 1e3)); // get time stamp in milliseconds
+            printf("Resource Blocks: ");
+            for (int i = 0; i < num_resource_blocks; i++) {
+                printf("%d", resource_block[i]);
+            }
+            // printf(" num side channels: %d\t size of size channels: %d", nsch, ssch);
+            printf("\n"); 
+
+            fprintf(logfile, "%u\t", current_sf_idx); 
+            fprintf(logfile, "%lu\t", (uint64_t) round(srslte_timestamp_real(&ue_sync.last_timestamp) * 1e3)); 
+            for (int i = 0; i < num_resource_blocks; i++) {
+                fprintf(logfile, "%d", resource_block[i]);
+            }
+            fprintf(logfile, "\n");
+
+            /*
+            * END OF ADDED CODE TO PROBE SCI FOR SCI FORMAT 1 INFORMATION.
+            */ 
 
             // 3GPP TS 36.213 Section 14.1.1.4C
             uint32_t pssch_prb_start_idx = (sub_channel_idx * sl_comm_resource_pool.size_sub_channel) +
@@ -446,15 +515,16 @@ int main(int argc, char** argv)
               if (srslte_pssch_decode(&pssch, equalized_sf_buffer, tb, SRSLTE_SL_SCH_MAX_TB_LEN) == SRSLTE_SUCCESS) {
                 num_decoded_tb++;
 
+                // ADDED -- COMMENTED THIS WHOLE FPRINTF PART OUT
                 // write logfile
-                fprintf(logfile,"%lu,%d,%d,%d,%d,%d,%d\n",
-                        (uint64_t) round(srslte_timestamp_real(&ue_sync.last_timestamp) * 1e6),
-                        pssch_prb_start_idx,
-                        nof_prb_pssch,
-                        N_x_id,
-                        sci.mcs_idx,
-                        rv_idx,
-                        current_sf_idx);
+                // fprintf(logfile,"%lu,%d,%d,%d,%d,%d,%d\n",
+                //         (uint64_t) round(srslte_timestamp_real(&ue_sync.last_timestamp) * 1e6),
+                //         pssch_prb_start_idx,
+                //         nof_prb_pssch,
+                //         N_x_id,
+                //         sci.mcs_idx,
+                //         rv_idx,
+                //         current_sf_idx);
 
 
               }
@@ -475,7 +545,9 @@ int main(int argc, char** argv)
       }
     }
 
+    // printf("Current sf idx is %u\n", current_sf_idx); // ADDED
     current_sf_idx = (current_sf_idx + 1) % 10;
+
     subframe_count++;
   }
 
