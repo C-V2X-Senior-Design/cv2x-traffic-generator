@@ -393,6 +393,7 @@ int srslte_pssch_decode(srslte_pssch_t* q, cf_t* equalized_sf_syms, uint8_t* out
   if (srslte_dft_precoding(
           &q->idft_precoder, q->scfdma_symbols, q->symbols, q->pssch_cfg.nof_prb, q->nof_data_symbols) !=
       SRSLTE_SUCCESS) {
+      ERROR("Not able to transform");
     return SRSLTE_ERROR;
   }
 
@@ -461,6 +462,7 @@ int srslte_pssch_decode(srslte_pssch_t* q, cf_t* equalized_sf_syms, uint8_t* out
 
       // CRC check
       if (srslte_bit_diff(q->cb_crc_temp, &q->c_r[(K_r - L)], L) != 0) {
+        ERROR("Checksum error one");
         return SRSLTE_ERROR;
       }
     }
@@ -483,7 +485,9 @@ int srslte_pssch_decode(srslte_pssch_t* q, cf_t* equalized_sf_syms, uint8_t* out
 
   // CRC check
   if (srslte_bit_diff(q->tb_crc_temp, &q->b[(B - SRSLTE_PSSCH_CRC_LEN)], SRSLTE_PSSCH_CRC_LEN) != 0) {
+    ERROR("Checksum error two");
     return SRSLTE_ERROR;
+
   }
 
   // Remove CRC and copy to output buffer

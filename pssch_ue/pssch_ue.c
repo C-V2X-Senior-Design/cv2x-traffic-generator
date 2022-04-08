@@ -418,6 +418,7 @@ int main(int argc, char** argv)
         srslte_chest_sl_ls_estimate_equalize(&pscch_chest, sf_buffer[0], equalized_sf_buffer);
 
         if (srslte_pscch_decode(&pscch, equalized_sf_buffer, sci_rx, pscch_prb_start_idx) == SRSLTE_SUCCESS) {
+          printf("pscch decoded!\n");
           if (srslte_sci_format1_unpack(&sci, sci_rx) == SRSLTE_SUCCESS) {   // WE CARE ABOUT THIS !!!
                                                     // unpacked SCI format 1 data is in sci variable (refer to Fabian Eckermann's paper for more details)
             srslte_sci_info(&sci, sci_msg, sizeof(sci_msg));
@@ -455,6 +456,7 @@ int main(int argc, char** argv)
             uint32_t rb_start_idx = (sub_channel_start_idx - 1) * ssch + 1; // define the start of the contiguous resource blocks allocation 
             uint32_t rb_end_idx = rb_start_idx + L_subCH * ssch - 1; // define the end of the contiguous resource blocks allocation 
             // printf("Num resource blocks is %u\n", num_resource_blocks);
+            printf("sub_channel_start_idx=%u\n", sub_channel_start_idx);
             for (int rb = 0; rb < num_resource_blocks; rb++) {  // rb = "resource block"
                 if ((rb+1) < rb_start_idx || (rb+1) > rb_end_idx)
                     resource_block[rb] = false; // RB not allocated
@@ -514,6 +516,8 @@ int main(int argc, char** argv)
             if (srslte_pssch_set_cfg(&pssch, pssch_cfg) == SRSLTE_SUCCESS) {
               if (srslte_pssch_decode(&pssch, equalized_sf_buffer, tb, SRSLTE_SL_SCH_MAX_TB_LEN) == SRSLTE_SUCCESS) {
                 num_decoded_tb++;
+
+                printf("\n\n\n\n\n*******BAHHH HUMBUG***********\n\n\n\n\n"); // ADDED
 
                 // ADDED -- COMMENTED THIS WHOLE FPRINTF PART OUT
                 // write logfile

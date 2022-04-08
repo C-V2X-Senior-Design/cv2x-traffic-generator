@@ -413,13 +413,22 @@ int main(int argc, char** argv)
   uint8_t tb[SRSLTE_SL_SCH_MAX_TB_LEN] = {};
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  srslte_random_t random_gen = srslte_random_init(tv.tv_usec);
+  printf("ASDFGHJKL************************************************************\n"); //ADDED
+  printf("%u\n",srsue_vue_sl.pssch_tx.sl_sch_tb_len); // ADDED
+  // srslte_random_t random_gen = srslte_random_init(tv.tv_usec);
+  /* ADDED: START OF CODE TO ADJUST TB LENGTH PARAMETER (AKA. sl_sch_tb_len) SO THAT WE CAN ACTUALLY TRANSMIT STUFF RATHER THAN JUNK */ 
+  srsue_vue_sl.pssch_tx.sl_sch_tb_len = SRSLTE_SL_SCH_MAX_TB_LEN; // ADDED : TRY MANUALLY SETTING THIS PARAMETER
+  /* ADDED: END OF CODE TO ADJUST TB LENGTH PARAMETER */ 
+
   for (int i = 0; i < srsue_vue_sl.pssch_tx.sl_sch_tb_len; i++) {
-    tb[i] = srslte_random_uniform_int_dist(random_gen, 0, 1);
+      //printf("HERE????************************************************************\n"); //ADDED
+    // tb[i] = srslte_random_uniform_int_dist(random_gen, 0, 1);   // ADDED THIS COMMENT: fills transport block with integer distributed uniformly between 0 and 1
+    tb[i] = 1;   // ADDED THIS COMMENT: fills transport block with 1s
+    //printf("TB[%d]: %u\n", i, tb[i]); // ADDED this line to print transport block buffer
   }
 
   srslte_pssch_data_t data;
-  data.ptr = tb;  // ptr is a pointer to a uint8_t and it points to the start of tb[]
+  data.ptr = tb;  // ADDED this comment: ptr is a pointer to a uint8_t and it points to the start of tb[]
 
   srslte_sl_sf_cfg_t sf;
   cf_t* signal_buffer_tx[REP_INTERVL] = {};
