@@ -1,30 +1,33 @@
-# Changelog for debugging cv2x transmit and pssch_ue (in cv2x traffic generator fork)
-### Author: Julia Zeng (zjulia@bu.edu)
+## Changelog for debugging cv2x transmit and pssch_ue (in cv2x traffic generator fork)
+##### Author: Julia Zeng (zjulia@bu.edu)
+ 
+<br> </br> 
 
-
-##### Issue No.1
+## Issue No.1
 No packets were passing the srslte_pssch_decode in pssch_ue.c, i.e.
 num_decoded_tb always equaled 0, and therefore no PCAPs were generated.
 
 
-** Problemtatic filename:function:linenum? **
+**Problemtatic filename:function:linenum?**
 - /lib/src/phy/phch/pssch.c:srslte_pssch_decode:464
 - /lib/src/phy/phch/pssch.c:srslte_pssch_decode:487
 
-** What is the issue in that line? **
+**What is the issue in that line?**
 - It is not passing the checksum, i.e. srslte_bit_diff(), which essentially checks that every bit is the same and as a result an error is returned to pssch_ue indicating the packet cannot be decoded. 
 
-** How to recreate the error? **
+**How to recreate the error?**
 - Add ERROR("Checksum error") error printing statements to those two places
 - Run pssch_ue.c. You should now see those "Checksum error" error messages printed to the console
 
-** How I "solved" this issue? **
+**How I "solved" this issue?**
 - Commented out CRC in /lib/src/phy/phch/pssch.c:srslte_pssch_decode:464 and /lib/src/phy/phch/pssch.c:srslte_pssch_decode:487
 - Now, pssch_ue will generate PCAPs in tmp/pssch.pcap, but this is garbage
 
 
-
-##### Issue No.2
+ <br> </br> 
+ 
+ 
+## Issue No.2
 This is not an issue, but instructions on how to populate the transport block (payload) in C-V2X traffic generator.
 
 - In the original fork, C-V2X does not populate the tb[] array, possibly because it is only used for stress-testing of SCI. 
@@ -32,8 +35,10 @@ This is not an issue, but instructions on how to populate the transport block (p
 - e.g.: cv2x_traffic_generator.c:426 populates tb with all 1s. 
 
 
+ <br> </br> 
 
-##### Issue No.3
+
+## Issue No.3
 (Cross-documented with modSrsRan)
 This is not an issue, but rather an explanation for why we do not need to
 account for the non-adjacent C-V2X subchannelization scheme, just the adjacent scheme.
