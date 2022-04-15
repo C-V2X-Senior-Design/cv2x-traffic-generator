@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "srslte/phy/ch_estimation/chest_sl.h"
+//#include "srslte/phy/common/phy_common.h"
 #include "srslte/phy/common/phy_common_sl.h"
 #include "srslte/phy/dft/ofdm.h"
 #include "srslte/phy/phch/pscch.h"
@@ -41,10 +42,11 @@
 #include "srslte/phy/utils/bit.h"
 #include "srslte/phy/utils/debug.h"
 #include "srslte/phy/utils/vector.h"
-
+//#include "srslte/srslte.h"
+#include "srslte/phy/io/filesink.h"
 
 bool keep_running = true;
-
+char*                 output_file_name = NULL;
 srslte_cell_sl_t cell_sl = {.nof_prb = 50, .tm = SRSLTE_SIDELINK_TM4, .cp = SRSLTE_CP_NORM, .N_sl_id = 0};
 
 typedef struct {
@@ -113,8 +115,11 @@ void parse_args(prog_args_t* args, int argc, char** argv)
   int opt;
   args_default(args);
 
-  while ((opt = getopt(argc, argv, "aAcdfgmnoprsv")) != -1) {
+  while ((opt = getopt(argc, argv, "laAcdfgmnoprsv")) != -1) {
     switch (opt) {
+      case 'l':
+        output_file_name = argv[optind];
+        break;
       case 'a':
         args->rf_args = argv[optind];
         break;
@@ -159,7 +164,7 @@ void parse_args(prog_args_t* args, int argc, char** argv)
         exit(-1);
     }
   }
-  if (args->rf_freq < 0) {
+  if (args->rf_freq < 0 || output_file_name == NULL) {
     usage(args, argv[0]);
     exit(-1);
   }
@@ -184,12 +189,12 @@ int main(int argc, char** argv)
   sigemptyset(&sigset);
   sigaddset(&sigset, SIGINT);
   sigprocmask(SIG_UNBLOCK, &sigset, NULL);
-
+  srslte_filesink_t sink                        = {};
   uint32_t num_decoded_sci = 0;
   uint32_t num_decoded_tb  = 0;
 
   parse_args(&prog_args, argc, argv);
-
+  srslte_filesink_init(&sink, output_file_name, SRSLTE_COMPLEX_FLOAT_BIN);
   /***** logfile *******/
   struct tm* timeinfo;
   time_t     current_time = time(0); // Get the system time
@@ -382,6 +387,8 @@ int main(int argc, char** argv)
     if (ret < 0) {
       ERROR("Error calling srslte_ue_sync_work()\n");
     }
+        printf("Writing to file %6d subframes...\r", subframe_count);
+        srslte_filesink_write_multi(&sink, (void**)rx_buffer, SRSLTE_SF_LEN_PRB(cell.nof_prb), prog_args.nof_rx_antennas);
 
     // update SF index
     current_sf_idx = srslte_ue_sync_get_sfidx(&ue_sync);
