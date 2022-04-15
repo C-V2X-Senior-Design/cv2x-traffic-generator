@@ -30,7 +30,6 @@
 #include <unistd.h>
 
 #include "srslte/phy/ch_estimation/chest_sl.h"
-//#include "srslte/phy/common/phy_common.h"
 #include "srslte/phy/common/phy_common_sl.h"
 #include "srslte/phy/dft/ofdm.h"
 #include "srslte/phy/phch/pscch.h"
@@ -42,7 +41,6 @@
 #include "srslte/phy/utils/bit.h"
 #include "srslte/phy/utils/debug.h"
 #include "srslte/phy/utils/vector.h"
-//#include "srslte/srslte.h"
 #include "srslte/phy/io/filesink.h"
 
 bool keep_running = true;
@@ -489,6 +487,7 @@ int main(int argc, char** argv)
   fclose(logfile);
   printf("num_decoded_sci=%d num_decoded_tb=%d\n", num_decoded_sci, num_decoded_tb);
 
+  srslte_filesink_free(&sink);
   srslte_rf_stop_rx_stream(&radio);
   srslte_rf_close(&radio);
   srslte_ue_sync_free(&ue_sync);
