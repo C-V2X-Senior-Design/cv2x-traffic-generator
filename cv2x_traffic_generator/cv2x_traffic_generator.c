@@ -356,9 +356,9 @@ int main(int argc, char** argv)
   if (prog_args.input_file_name) {
     fprintf(stdout, "Reading input file %s\n", prog_args.input_file_name);
     fflush(stdout);
-    parse_input_file(prog_args.input_file_name, sf_config, prog_args.num_sub_channel);
+    parse_input_file(prog_args.input_file_name, sf_config, prog_args.num_sub_channel);  // copies the data from the input files into sf_config prog_args.num_sub_channel
   } else {
-    for (int sf_idx = 0; sf_idx < REP_INTERVL; sf_idx++) {
+    for (int sf_idx = 0; sf_idx < REP_INTERVL; sf_idx++) {   // populates a 1D array of 100 sf_config_t structs with the sub_channel_start_idx and l_sub_channel constants 
       sf_config[sf_idx].sub_channel_start_idx = prog_args.sub_channel_start_idx;
       sf_config[sf_idx].l_sub_channel = prog_args.l_sub_channel;
     }
@@ -413,13 +413,22 @@ int main(int argc, char** argv)
   uint8_t tb[SRSLTE_SL_SCH_MAX_TB_LEN] = {};
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  srslte_random_t random_gen = srslte_random_init(tv.tv_usec);
+  printf("ASDFGHJKL************************************************************\n"); //ADDED
+  printf("%u\n",srsue_vue_sl.pssch_tx.sl_sch_tb_len); // ADDED
+  // srslte_random_t random_gen = srslte_random_init(tv.tv_usec);
+  /* ADDED: START OF CODE TO ADJUST TB LENGTH PARAMETER (AKA. sl_sch_tb_len) SO THAT WE CAN ACTUALLY TRANSMIT STUFF RATHER THAN JUNK */ 
+  srsue_vue_sl.pssch_tx.sl_sch_tb_len = SRSLTE_SL_SCH_MAX_TB_LEN; // ADDED : TRY MANUALLY SETTING THIS PARAMETER
+  /* ADDED: END OF CODE TO ADJUST TB LENGTH PARAMETER */ 
+
   for (int i = 0; i < srsue_vue_sl.pssch_tx.sl_sch_tb_len; i++) {
-    tb[i] = srslte_random_uniform_int_dist(random_gen, 0, 1);
+      //printf("HERE????************************************************************\n"); //ADDED
+    // tb[i] = srslte_random_uniform_int_dist(random_gen, 0, 1);   // ADDED THIS COMMENT: fills transport block with integer distributed uniformly between 0 and 1
+    tb[i] = 1;   // ADDED THIS COMMENT: fills transport block with 1s
+    //printf("TB[%d]: %u\n", i, tb[i]); // ADDED this line to print transport block buffer
   }
 
   srslte_pssch_data_t data;
-  data.ptr = tb;
+  data.ptr = tb;  // ADDED this comment: ptr is a pointer to a uint8_t and it points to the start of tb[]
 
   srslte_sl_sf_cfg_t sf;
   cf_t* signal_buffer_tx[REP_INTERVL] = {};
@@ -443,14 +452,14 @@ int main(int argc, char** argv)
       data.l_sub_channel         = sf_config[sf_idx].l_sub_channel;
 
       sf.tti = sf_idx;
-      if (srslte_ue_sl_encode(&srsue_vue_sl, &sf, &data)) {
+      if (srslte_ue_sl_encode(&srsue_vue_sl, &sf, &data)) {         // Encodes sidelink information ??? checkout this function
         ERROR("Error encoding sidelink\n");
         exit(-1);
       }
 
       write_tx_metrics(&srsue_vue_sl, &tx_metrics[sf_idx], sf_idx);
 
-      memcpy(signal_buffer_tx[sf_idx], srsue_vue_sl.signal_buffer_tx, sizeof(cf_t) * srsue_vue_sl.sf_len);
+      memcpy(signal_buffer_tx[sf_idx], srsue_vue_sl.signal_buffer_tx, sizeof(cf_t) * srsue_vue_sl.sf_len); // important -- extract info from here
     }
   }
 
@@ -458,11 +467,13 @@ int main(int argc, char** argv)
   srslte_timestamp_t start_time, tx_time, now;
 
   get_start_time(&radio, &start_time);
+  // printf("OUTSIDE WHILE LOOP\n"); 
 
   uint32_t tx_sec_offset = 0;
   uint32_t tx_msec_offset = 0;
 
   while (keep_running) {
+    // printf("IN WHILE LOOP\n"); 
 
     srslte_timestamp_copy(&tx_time, &start_time);
     srslte_timestamp_add(&tx_time, tx_sec_offset, tx_msec_offset * 1e-3);
@@ -477,11 +488,19 @@ int main(int argc, char** argv)
 
       tx_sec_offset = 0;
       tx_msec_offset = 0;
+      // ADDED
+      printf("IN ADDED\n"); 
     }
     else {
-
+      // printf("IN ELSE\n");       // ADDED
       // only if data to transmit
       if (sf_config[tx_msec_offset % REP_INTERVL].l_sub_channel > 0) {
+        // printf("l sub channel is %d\n", sf_config[tx_msec_offset % REP_INTERVL].l_sub_channel);
+        // printf("sub channel start idx is %d\n", sf_config[tx_msec_offset % REP_INTERVL].sub_channel_start_idx);
+
+        // ADDED code to print the subframe index
+        // printf("subframe index %u\n", tx_metrics[tx_msec_offset % REP_INTERVL].sf_idx);
+        // END of code to print the subframe index
 
         int ret = srslte_rf_send_timed2(&radio,
                                         signal_buffer_tx[tx_msec_offset % REP_INTERVL],
@@ -494,15 +513,27 @@ int main(int argc, char** argv)
           ERROR("Error sending data: %d\n", ret);
         }
 
+        // ADDED code to correct printing to logfile. THE ORIGINAL IS INCORRECT!!! Original is commented out below
         // write logfile
         fprintf(logfile,"%lu,%d,%d,%d,%d,%d,%d\n",
                 (uint64_t) round(srslte_timestamp_real(&tx_time) * 1e6),
-                tx_metrics->pssch_prb_start_idx,
-                tx_metrics->pssch_nof_prb,
-                tx_metrics->pssch_N_x_id,
-                tx_metrics->pssch_mcs_idx,
-                tx_metrics->pssch_rv_idx,
-                tx_metrics->sf_idx % 10);
+                tx_metrics[tx_msec_offset % REP_INTERVL].pssch_prb_start_idx,
+                tx_metrics[tx_msec_offset % REP_INTERVL].pssch_nof_prb,
+                tx_metrics[tx_msec_offset % REP_INTERVL].pssch_N_x_id,
+                tx_metrics[tx_msec_offset % REP_INTERVL].pssch_mcs_idx,
+                tx_metrics[tx_msec_offset % REP_INTERVL].pssch_rv_idx,
+                tx_metrics[tx_msec_offset % REP_INTERVL].sf_idx % 10);
+
+
+        // write logfile
+        // fprintf(logfile,"%lu,%d,%d,%d,%d,%d,%d\n",
+        //         (uint64_t) round(srslte_timestamp_real(&tx_time) * 1e6),
+        //         tx_metrics->pssch_prb_start_idx,
+        //         tx_metrics->pssch_nof_prb,
+        //         tx_metrics->pssch_N_x_id,
+        //         tx_metrics->pssch_mcs_idx,
+        //         tx_metrics->pssch_rv_idx,
+        //         tx_metrics->sf_idx % 10);
 
         if (debug_log) {
           print_tx_metrics(&tx_metrics[tx_msec_offset % REP_INTERVL]);

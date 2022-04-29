@@ -803,11 +803,14 @@ void srslte_bit_fprint(FILE* stream, uint8_t* bits, int nof_bits)
 uint32_t srslte_bit_diff(const uint8_t* x, const uint8_t* y, int nbits)
 {
   uint32_t errors = 0;
+  // printf("X, Y\n");  // ADDED FOR DEBUGGING
   for (int i = 0; i < nbits; i++) {
+    // printf("%u, %u\n", x[i], y[i]);  // ADDED FOR DEBUGGINGS
     if (x[i] != y[i]) {
       errors++;
     }
   }
+  // printf("END OF CRC CHECK\n");
   return errors;
 }
 
